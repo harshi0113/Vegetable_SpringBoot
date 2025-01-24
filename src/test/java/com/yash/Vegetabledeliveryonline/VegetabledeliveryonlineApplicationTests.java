@@ -2,17 +2,12 @@ package com.yash.Vegetabledeliveryonline;
 
 import jakarta.servlet.http.HttpSession;
 import org.junit.jupiter.api.Test;
-
-
-
 import com.yash.Vegetabledeliveryonline.domain.User;
 import com.yash.Vegetabledeliveryonline.repository.UserRepository;
 import com.yash.Vegetabledeliveryonline.service.UserService;
 import com.yash.Vegetabledeliveryonline.service.UserServiceImpl;
 import com.yash.Vegetabledeliveryonline.controller.UserController;
 import com.yash.Vegetabledeliveryonline.config.JwtService;
-
-
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
@@ -21,11 +16,12 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.http.MediaType;
-import javax.naming.AuthenticationException;
-import java.time.Duration;
+import java.io.IOException;
 import java.util.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.BDDMockito.given;
@@ -47,7 +43,6 @@ class VegetabledeliveryonlineApplicationTests {
 
 	@Mock
 	private AuthenticationManager authenticationManager;
-
 
 
 	@Spy  //Creates a real object but allows mocking specific methods
@@ -88,9 +83,6 @@ class VegetabledeliveryonlineApplicationTests {
 		testUser.setRole(userServiceImpl.ROLE_BUYER);
 		testUser.setLoginStatus(userServiceImpl.LOGIN_STATUS_ACTIVE);
 	}
-
-
-
 
 
 	@AfterEach
@@ -152,7 +144,6 @@ class VegetabledeliveryonlineApplicationTests {
 		}
 	}
 
-
 	@Nested
 	@DisplayName("User Service Tests")
 	class UserServiceTests {
@@ -171,8 +162,6 @@ class VegetabledeliveryonlineApplicationTests {
 			User capturedUser = userCaptor.getValue();
 			assertEquals(testUser.getLoginName(), capturedUser.getLoginName());
 		}
-
-
 
 		@Test
 		@DisplayName("Should handle registration failure")
@@ -236,17 +225,12 @@ class VegetabledeliveryonlineApplicationTests {
 	}
 
 	@Nested
-	@DisplayName("User Controller Tests")
-	class UserControllerTests {
+	@DisplayName("Registration Tests")
+	class RegistrationTests {
 
-
-		//Test user registration with image upload
 		@Test
-		@DisplayName("Should register user with image")
+		@DisplayName("Should successfully register user with image")
 		void testRegisterWithImage() throws Exception {
-
-
-			// Create test image file
 			MockMultipartFile imageFile = new MockMultipartFile(
 					"imageFile",
 					"test.jpg",
@@ -254,84 +238,356 @@ class VegetabledeliveryonlineApplicationTests {
 					"test image content".getBytes()
 			);
 
-			// Mock service behavior
-			when(userService.register(any(User.class))).thenAnswer(invocation -> {
-				User registeredUser = invocation.getArgument(0);
-				registeredUser.setUserId(1L); // Simulate DB save
-				return registeredUser;
+			when(userService.register(any(User.class))).thenAnswer(i -> {
+				User user = i.getArgument(0);
+				user.setUserId(1L);
+				return user;
 			});
 
-			// Execute test
 			ResponseEntity<?> response = userController.register(testUser, imageFile);
 
-			// Verify response
 			assertEquals(HttpStatus.OK, response.getStatusCode());
-			verify(userService).register(argThat(registeredUser ->
-					registeredUser.getLoginStatus().equals(UserService.LOGIN_STATUS_ACTIVE) &&
-							registeredUser.getImage() != null
+			verify(userService).register(argThat(user ->
+					user.getImage() != null &&
+							user.getLoginStatus().equals(userService.LOGIN_STATUS_ACTIVE)
+			));
+		}
+
+		@Test
+		@DisplayName("Should register user without image")
+		void testRegisterWithoutImage() throws Exception {
+			when(userService.register(any(User.class))).thenReturn(testUser);
+
+			ResponseEntity<?> response = userController.register(testUser, null);
+
+			assertEquals(HttpStatus.OK, response.getStatusCode());
+			verify(userService).register(argThat(user ->
+					user.getImage() == null &&
+							user.getLoginStatus().equals(userService.LOGIN_STATUS_ACTIVE)
+			));
+		}
+
+		@Test
+		@DisplayName("Should handle duplicate username")
+		void testRegisterDuplicateUsername() throws Exception {
+			when(userService.register(any(User.class)))
+					.thenThrow(new DuplicateKeyException("Duplicate username"));
+
+			ResponseEntity<?> response = userController.register(testUser, null);
+
+			assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+			@SuppressWarnings("unchecked")
+			Map<String, String> responseBody = (Map<String, String>) response.getBody();
+			assertEquals("Username already exists", responseBody.get("error"));
+		}
+
+		@Test
+		@DisplayName("Should successfully register seller with image")
+		void testRegisterSellerWithImage() throws Exception {
+			// Setup seller user
+			testUser.setRole(userService.ROLE_SELLER);
+
+			MockMultipartFile imageFile = new MockMultipartFile(
+					"imageFile",
+					"test.jpg",
+					MediaType.IMAGE_JPEG_VALUE,
+					"test image content".getBytes()
+			);
+
+			when(userService.register(any(User.class))).thenAnswer(i -> {
+				User user = i.getArgument(0);
+				user.setUserId(1L);
+				return user;
+			});
+
+			ResponseEntity<?> response = userController.register(testUser, imageFile);
+
+			assertEquals(HttpStatus.OK, response.getStatusCode());
+			verify(userService).register(argThat(user ->
+					user.getImage() != null &&
+							user.getRole().equals(userService.ROLE_SELLER) &&
+							user.getLoginStatus().equals(userService.LOGIN_STATUS_BLOCKED)
 			));
 		}
 
 
-		//Test various login scenarios (success, blocked user, auth failure)
 		@Test
-		@DisplayName("Should handle login with different scenarios")
-		void testLoginScenarios() {
-			// Setup test data
-			Map<String, String> credentials = new HashMap<>();
-			credentials.put("loginName", "testuser");
-			credentials.put("password", "password123");
+		@DisplayName("Should register buyer without image")
+		void testRegisterBuyerWithoutImage() throws Exception {
+			// Setup buyer user
+			testUser.setRole(userService.ROLE_BUYER);
 
-			User activeUser = new User();
-			activeUser.setUserId(1L);
-			activeUser.setName("Test User");
-			activeUser.setLoginName("testuser");
-			activeUser.setPassword("encoded_password");
-			activeUser.setEmail("test@example.com");
-			activeUser.setLoginStatus(UserService.LOGIN_STATUS_ACTIVE);
+			when(userService.register(any(User.class))).thenReturn(testUser);
 
-			// Scenario 1: Successful login
-			when(userService.findByLoginName("testuser")).thenReturn(activeUser);
-			when(jwtService.generateToken(activeUser)).thenReturn("test.jwt.token");
-			when(authenticationManager.authenticate(any())).thenReturn(null);
+			ResponseEntity<?> response = userController.register(testUser, null);
 
-			ResponseEntity<?> response = userController.login(credentials);
 			assertEquals(HttpStatus.OK, response.getStatusCode());
-			verify(jwtService).generateToken(activeUser);
-
-			// Scenario 2: Blocked user
-			User blockedUser = new User();
-			blockedUser.setLoginName("testuser");
-			blockedUser.setPassword("encoded_password");
-			blockedUser.setLoginStatus(UserService.LOGIN_STATUS_BLOCKED);
-
-			when(userService.findByLoginName("testuser")).thenReturn(blockedUser);
-
-			response = userController.login(credentials);
-			assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-
-			// Scenario 3: Authentication failure
-			when(userService.findByLoginName("testuser")).thenReturn(activeUser);
-			when(authenticationManager.authenticate(any()))
-					.thenThrow(new AuthenticationException("Invalid credentials") {});
-
-			response = userController.login(credentials);
-			assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+			verify(userService).register(argThat(user ->
+					user.getImage() == null &&
+							user.getRole().equals(userService.ROLE_BUYER) &&
+							user.getLoginStatus().equals(userService.LOGIN_STATUS_ACTIVE)
+			));
 		}
 
 
-		//Test username availability check
+//		@Test
+//		@DisplayName("Should handle image processing error for seller")
+//		void testRegisterImageProcessingError() throws Exception {
+//			// Setup seller user
+//			testUser.setRole(userService.ROLE_SELLER);
+//
+//			MockMultipartFile imageFile = new MockMultipartFile(
+//					"imageFile",
+//					"test.jpg",
+//					MediaType.IMAGE_JPEG_VALUE,
+//					new byte[0]
+//			);
+//
+//			when(userService.register(any(User.class)))
+//					.thenThrow(new IOException("Error processing image"));
+//
+//			ResponseEntity<?> response = userController.register(testUser, imageFile);
+//
+//			assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+//			@SuppressWarnings("unchecked")
+//			Map<String, String> responseBody = (Map<String, String>) response.getBody();
+//			assertEquals("Error processing image file", responseBody.get("error"));
+//		}
+
+		@Test
+		@DisplayName("Should handle general registration error")
+		void testRegisterGeneralError() throws Exception {
+			when(userService.register(any(User.class)))
+					.thenThrow(new RuntimeException("Database connection failed"));
+
+			ResponseEntity<?> response = userController.register(testUser, null);
+
+			assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+			@SuppressWarnings("unchecked")
+			Map<String, String> responseBody = (Map<String, String>) response.getBody();
+			assertEquals("Registration failed: Database connection failed", responseBody.get("error"));
+		}
+
+
+		@Test
+		@DisplayName("Should register seller with blocked status")
+		void testRegisterSeller() throws Exception {
+			testUser.setRole(userService.ROLE_SELLER);
+			when(userService.register(any(User.class))).thenReturn(testUser);
+
+			ResponseEntity<?> response = userController.register(testUser, null);
+
+			assertEquals(HttpStatus.OK, response.getStatusCode());
+			verify(userService).register(argThat(user ->
+					user.getLoginStatus().equals(userService.LOGIN_STATUS_BLOCKED)
+			));
+		}
+
+
+		@Nested
+		@DisplayName("Login Tests")
+		class LoginTests {
+
+			@Test
+			@DisplayName("Should successfully login active user")
+			void testSuccessfulLogin() {
+				User activeUser = new User();
+				activeUser.setUserId(1L);
+				activeUser.setName("Active User");
+				activeUser.setLoginName("activeuser");
+				activeUser.setPassword("activepass123");
+				activeUser.setEmail("active@example.com");
+				activeUser.setRole(userService.ROLE_BUYER);
+				activeUser.setLoginStatus(userService.LOGIN_STATUS_ACTIVE);
+
+				Map<String, String> credentials = new HashMap<>();
+				credentials.put("loginName", "activeuser");
+				credentials.put("password", "activepass123");
+
+				when(userService.findByLoginName("activeuser")).thenReturn(activeUser);
+				when(jwtService.generateToken(activeUser)).thenReturn("test.jwt.token");
+				when(authenticationManager.authenticate(any())).thenReturn(
+						new UsernamePasswordAuthenticationToken(activeUser, null)
+				);
+
+				ResponseEntity<?> response = userController.login(credentials);
+
+				assertEquals(HttpStatus.OK, response.getStatusCode());
+				@SuppressWarnings("unchecked")
+				Map<String, Object> responseBody = (Map<String, Object>) response.getBody();
+				assertNotNull(responseBody);
+				assertNotNull(responseBody.get("token"));
+				assertEquals("test.jwt.token", responseBody.get("token"));
+				@SuppressWarnings("unchecked")
+				Map<String, Object> userInfo = (Map<String, Object>) responseBody.get("user");
+				assertEquals(activeUser.getName(), userInfo.get("name"));
+				assertEquals(activeUser.getEmail(), userInfo.get("email"));
+				assertEquals(activeUser.getRole(), userInfo.get("role"));
+				assertEquals(activeUser.getUserId(), userInfo.get("userId"));
+			}
+
+			@Test
+			@DisplayName("Should reject login for blocked user")
+			void testBlockedUserLogin() {
+				User blockedUser = new User();
+				blockedUser.setUserId(2L);
+				blockedUser.setName("Blocked User");
+				blockedUser.setLoginName("blockeduser");
+				blockedUser.setPassword("blockedpass123");
+				blockedUser.setEmail("blocked@example.com");
+				blockedUser.setRole(userService.ROLE_BUYER);
+				blockedUser.setLoginStatus(userService.LOGIN_STATUS_BLOCKED);
+
+				Map<String, String> credentials = new HashMap<>();
+				credentials.put("loginName", "blockeduser");
+				credentials.put("password", "blockedpass123");
+
+				when(userService.findByLoginName("blockeduser")).thenReturn(blockedUser);
+
+				ResponseEntity<?> response = userController.login(credentials);
+
+				assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+				@SuppressWarnings("unchecked")
+				Map<String, String> responseBody = (Map<String, String>) response.getBody();
+				assertEquals("Account is blocked", responseBody.get("error"));
+			}
+
+			@Test
+			@DisplayName("Should handle invalid credentials")
+			void testInvalidCredentials() {
+				User user = new User();
+				user.setUserId(3L);
+				user.setName("Invalid Cred User");
+				user.setLoginName("invaliduser");
+				user.setPassword("correctpass123");
+				user.setEmail("invalid@example.com");
+				user.setRole(userService.ROLE_BUYER);
+				user.setLoginStatus(userService.LOGIN_STATUS_ACTIVE);
+
+				Map<String, String> credentials = new HashMap<>();
+				credentials.put("loginName", "invaliduser");
+				credentials.put("password", "wrongpassword");
+
+				when(userService.findByLoginName("invaliduser")).thenReturn(user);
+				when(authenticationManager.authenticate(any()))
+						.thenThrow(new BadCredentialsException("Invalid credentials"));
+
+				ResponseEntity<?> response = userController.login(credentials);
+
+				assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+				@SuppressWarnings("unchecked")
+				Map<String, String> responseBody = (Map<String, String>) response.getBody();
+				assertEquals("Invalid credentials", responseBody.get("error"));
+			}
+
+			@Test
+			@DisplayName("Should handle successful seller login")
+			void testSellerLogin() {
+				User sellerUser = new User();
+				sellerUser.setUserId(4L);
+				sellerUser.setName("Seller User");
+				sellerUser.setLoginName("selleruser");
+				sellerUser.setPassword("sellerpass123");
+				sellerUser.setEmail("seller@example.com");
+				sellerUser.setRole(userService.ROLE_SELLER);
+				sellerUser.setLoginStatus(userService.LOGIN_STATUS_ACTIVE);
+
+				Map<String, String> credentials = new HashMap<>();
+				credentials.put("loginName", "selleruser");
+				credentials.put("password", "sellerpass123");
+
+				when(userService.findByLoginName("selleruser")).thenReturn(sellerUser);
+				when(jwtService.generateToken(sellerUser)).thenReturn("seller.jwt.token");
+				when(authenticationManager.authenticate(any())).thenReturn(
+						new UsernamePasswordAuthenticationToken(sellerUser, null)
+				);
+
+				ResponseEntity<?> response = userController.login(credentials);
+
+				assertEquals(HttpStatus.OK, response.getStatusCode());
+				@SuppressWarnings("unchecked")
+				Map<String, Object> responseBody = (Map<String, Object>) response.getBody();
+				assertNotNull(responseBody);
+				assertEquals("seller.jwt.token", responseBody.get("token"));
+				@SuppressWarnings("unchecked")
+				Map<String, Object> userInfo = (Map<String, Object>) responseBody.get("user");
+				assertEquals(sellerUser.getRole(), userInfo.get("role"));
+				assertEquals(sellerUser.getUserId(), userInfo.get("userId"));
+			}
+
+			@Test
+			@DisplayName("Should handle non-existent user")
+			void testNonExistentUser() {
+				Map<String, String> credentials = new HashMap<>();
+				credentials.put("loginName", "nonexistent");
+				credentials.put("password", "password123");
+
+				when(userService.findByLoginName("nonexistent")).thenReturn(null);
+
+				ResponseEntity<?> response = userController.login(credentials);
+
+				assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
+				@SuppressWarnings("unchecked")
+				Map<String, String> responseBody = (Map<String, String>) response.getBody();
+				assertEquals("Invalid credentials", responseBody.get("error"));
+			}
+		}
+
+		@Nested
+		@DisplayName("Status Management Tests")
+		class StatusManagementTests {
+
+			@Test
+			@DisplayName("Should successfully change user status")
+			void testChangeStatus() {
+				Long userId = 1L;
+				Integer newStatus = userService.LOGIN_STATUS_BLOCKED;
+
+				doNothing().when(userService).changeLoginStatus(userId, newStatus);
+
+				ResponseEntity<?> response = userController.changeStatus(userId, newStatus);
+
+				assertEquals(HttpStatus.OK, response.getStatusCode());
+				assertEquals("Status updated successfully", response.getBody());
+				verify(userService).changeLoginStatus(userId, newStatus);
+			}
+
+			@Test
+			@DisplayName("Should handle status change failure")
+			void testChangeStatusFailure() {
+				Long userId = 1L;
+				Integer newStatus = userService.LOGIN_STATUS_BLOCKED;
+
+				doThrow(new RuntimeException("Update failed"))
+						.when(userService).changeLoginStatus(userId, newStatus);
+
+				ResponseEntity<?> response = userController.changeStatus(userId, newStatus);
+
+				assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+				assertEquals("Error updating status", response.getBody());
+			}
+		}
+
+		@Test
+		@DisplayName("Should successfully handle logout")
+		void testLogout() {
+			HttpSession mockSession = mock(HttpSession.class);
+
+			ResponseEntity<?> response = userController.logout(mockSession);
+
+			assertEquals(HttpStatus.OK, response.getStatusCode());
+			assertEquals("Logged out successfully", response.getBody());
+			verify(mockSession).invalidate();
+		}
+
 		@Test
 		@DisplayName("Should check username availability")
 		void testCheckUsername() {
-			// Given
 			String username = "testuser";
 			when(userService.isUsernameExist(username)).thenReturn(false);
 
-			// When
 			ResponseEntity<?> response = userController.checkUsername(username);
 
-			// Then
 			assertEquals(HttpStatus.OK, response.getStatusCode());
 			@SuppressWarnings("unchecked")
 			Map<String, Boolean> responseBody = (Map<String, Boolean>) response.getBody();
@@ -339,31 +595,90 @@ class VegetabledeliveryonlineApplicationTests {
 			assertTrue(responseBody.get("available"));
 		}
 
-
-		//Test logout functionality
 		@Test
-		@DisplayName("Should handle logout")
-		void testLogout() {
-			// Given
-			HttpSession mockSession = mock(HttpSession.class);
+		@DisplayName("Should check username unavailability")
+		void testCheckUsernameUnavailable() {
+			String username = "existinguser";
+			when(userService.isUsernameExist(username)).thenReturn(true);
 
-			// When
-			ResponseEntity<?> response = userController.logout(mockSession);
+			ResponseEntity<?> response = userController.checkUsername(username);
 
-			// Then
 			assertEquals(HttpStatus.OK, response.getStatusCode());
-			verify(mockSession).invalidate();
+			@SuppressWarnings("unchecked")
+			Map<String, Boolean> responseBody = (Map<String, Boolean>) response.getBody();
+			assertNotNull(responseBody);
+			assertFalse(responseBody.get("available"));
 		}
 	}
 
-		@Test
-		@DisplayName("Should demonstrate timeout")
-		void testTimeout() {
-			// Demonstrates timeout testing
-			assertTimeoutPreemptively(Duration.ofMillis(100), () -> {
-				userService.getTotalUsers();
-			});
-		}
 
+	@Test
+	@DisplayName("Should handle internal server error during login")
+	void testLoginInternalServerError() {
+		Map<String, String> credentials = new HashMap<>();
+		credentials.put("loginName", "testuser");
+		credentials.put("password", "password123");
 
+		when(userService.findByLoginName(anyString()))
+				.thenThrow(new RuntimeException("Unexpected system error"));
+
+		ResponseEntity<?> response = userController.login(credentials);
+
+		assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+		@SuppressWarnings("unchecked")
+		Map<String, String> responseBody = (Map<String, String>) response.getBody();
+		assertTrue(responseBody.get("error").startsWith("Login failed:"));
 	}
+
+	@Test
+	@DisplayName("Should handle database connection failure during login")
+	void testLoginDatabaseConnectionFailure() {
+		Map<String, String> credentials = new HashMap<>();
+		credentials.put("loginName", "testuser");
+		credentials.put("password", "password123");
+
+		when(userService.findByLoginName(anyString()))
+				.thenThrow(new IllegalStateException("Database connection failed"));
+
+		ResponseEntity<?> response = userController.login(credentials);
+
+		assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+		@SuppressWarnings("unchecked")
+		Map<String, String> responseBody = (Map<String, String>) response.getBody();
+		assertTrue(responseBody.get("error").contains("Database connection failed"));
+	}
+
+	@Test
+	@DisplayName("Should handle jwt token generation failure")
+	void testLoginJwtTokenGenerationFailure() {
+		User activeUser = new User();
+		activeUser.setUserId(1L);
+		activeUser.setName("Active User");
+		activeUser.setLoginName("activeuser");
+		activeUser.setPassword("activepass123");
+		activeUser.setEmail("active@example.com");
+		activeUser.setRole(userService.ROLE_BUYER);
+		activeUser.setLoginStatus(userService.LOGIN_STATUS_ACTIVE);
+
+		Map<String, String> credentials = new HashMap<>();
+		credentials.put("loginName", "activeuser");
+		credentials.put("password", "activepass123");
+
+		when(userService.findByLoginName("activeuser")).thenReturn(activeUser);
+		when(authenticationManager.authenticate(any())).thenReturn(
+				new UsernamePasswordAuthenticationToken(activeUser, null)
+		);
+		when(jwtService.generateToken(activeUser))
+				.thenThrow(new RuntimeException("JWT token generation failed"));
+
+		ResponseEntity<?> response = userController.login(credentials);
+
+		assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+		@SuppressWarnings("unchecked")
+		Map<String, String> responseBody = (Map<String, String>) response.getBody();
+		assertTrue(responseBody.get("error").contains("Login failed"));
+	}
+
+
+}
+

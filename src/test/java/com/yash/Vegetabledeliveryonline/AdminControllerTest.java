@@ -41,7 +41,7 @@ class AdminControllerTest {
         testUser.setName("Test User");
         testUser.setLoginName("testuser");
         testUser.setEmail("test@example.com");
-        testUser.setRole(1); // Assuming 1 is for buyer role
+        testUser.setRole(3); // Assuming 3 is for buyer role
     }
 
     @Test
@@ -159,7 +159,7 @@ class AdminControllerTest {
         // Given
         Long userId = 1L;
         Integer newStatus = 1;
-        doThrow(new RuntimeException("Update failed")).when(userService).changeLoginStatus(userId, newStatus);
+        doThrow(new RuntimeException("Updated failed")).when(userService).changeLoginStatus(userId, newStatus);
 
         // When
         ResponseEntity<?> response = adminController.changeUserStatus(userId, newStatus);

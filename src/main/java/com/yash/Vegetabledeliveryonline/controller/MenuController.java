@@ -48,6 +48,7 @@ public class MenuController {
     @GetMapping("/{id}")
     public ResponseEntity<Menu> getMenu(@PathVariable Long menuId) {
         return ResponseEntity.ok(menuService.getMenuById(menuId));
+
     }
 
     @GetMapping("/shop/{id}")

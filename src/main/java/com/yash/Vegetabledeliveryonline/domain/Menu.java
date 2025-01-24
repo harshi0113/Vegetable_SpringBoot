@@ -24,5 +24,5 @@ public class Menu {
     @Column(columnDefinition = "LONGBLOB")
     private byte[] image;
 
-    // Getters and setters
+
 }

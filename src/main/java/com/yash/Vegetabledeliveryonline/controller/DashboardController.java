@@ -26,11 +26,6 @@ public class DashboardController {
         try {
             Map<String, Object> stats = new HashMap<>();
 
-            // Get order statistics
-//            stats.put("totalOrders", shopService.getTotalOrdersForUser(userId));
-//            stats.put("pendingOrders", shopService.getPendingOrdersForUser(userId));
-//            stats.put("completedOrders", shopService.getCompletedOrdersForUser(userId));
-//            stats.put("totalSpent", shopService.getTotalSpentByUser(userId));
 
             return ResponseEntity.ok(stats);
         } catch (Exception e) {

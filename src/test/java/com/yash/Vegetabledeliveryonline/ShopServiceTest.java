@@ -147,6 +147,32 @@ public class ShopServiceTest {
         assertEquals(1, allShops.size());
     }
 
+    @Test
+    @DisplayName("Should Find All Shops")
+    void testFindAll() {
+        // Given
+        Shop anotherShop = new Shop();
+        anotherShop.setId(2L);
+        anotherShop.setUserId(2L);
+        anotherShop.setName("Another Shop");
+        anotherShop.setAddress("456 Street");
+        anotherShop.setPhone("9876543210");
+        anotherShop.setEmail("another@test.com");
+
+        List<Shop> shops = Arrays.asList(testShop, anotherShop);
+        when(shopRepository.findAll())
+                .thenReturn(shops);
+
+        // When
+        List<Shop> allShops = shopService.findAll();
+
+        // Then
+        assertNotNull(allShops);
+        assertFalse(allShops.isEmpty());
+        assertEquals(2, allShops.size());
+        verify(shopRepository).findAll();
+    }
+
 
 }
 

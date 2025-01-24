@@ -1,12 +1,8 @@
 package com.yash.Vegetabledeliveryonline.service;
 
-
-
 import com.yash.Vegetabledeliveryonline.exception.UserBlockedException;
 import com.yash.Vegetabledeliveryonline.domain.User;
-
 import java.util.List;
-import java.util.Optional;
 
 public interface UserService {
     Integer ROLE_ADMIN = 1;

@@ -1,7 +1,5 @@
 package com.yash.Vegetabledeliveryonline;
 
-
-
 import com.yash.Vegetabledeliveryonline.controller.ShopController;
 import com.yash.Vegetabledeliveryonline.domain.Shop;
 import com.yash.Vegetabledeliveryonline.service.ShopService;
@@ -14,11 +12,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.junit.jupiter.api.Assertions.*;
@@ -149,6 +145,4 @@ public class ShopRepositoryTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(shopService).deleteShop(1L);
     }
-
-
 }

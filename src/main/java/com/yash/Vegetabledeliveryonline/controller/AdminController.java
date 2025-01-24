@@ -1,4 +1,4 @@
-package com.yash.Vegetabledeliveryonline.controller;
+ package com.yash.Vegetabledeliveryonline.controller;
 
 import com.yash.Vegetabledeliveryonline.domain.User;
 import com.yash.Vegetabledeliveryonline.service.UserService;

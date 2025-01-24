@@ -51,7 +51,7 @@ public class User implements UserDetails {
                 case 3:
                     authorities.add(new SimpleGrantedAuthority("ROLE_BUYER"));
                     break;
-                // Add other roles as needed
+
             }
         }
         return authorities;

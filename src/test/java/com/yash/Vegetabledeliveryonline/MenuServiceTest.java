@@ -1,6 +1,5 @@
 package com.yash.Vegetabledeliveryonline;
 
-
 import com.yash.Vegetabledeliveryonline.domain.Menu;
 import com.yash.Vegetabledeliveryonline.domain.Shop;
 import com.yash.Vegetabledeliveryonline.repository.MenuRepository;
@@ -145,5 +144,92 @@ class MenuServiceTest {
         assertNotNull(image);
         assertArrayEquals(testMenu.getImage(), image);
     }
+
+
+    @Test
+    @DisplayName("Should save menu with null image")
+    void testSaveMenuWithNullImage() throws IOException {
+        when(shopRepository.findById(1L)).thenReturn(Optional.of(testShop));
+        when(menuRepository.save(any(Menu.class))).thenReturn(testMenu);
+
+        Menu savedMenu = menuService.saveMenu(testMenu, null);
+
+        assertNotNull(savedMenu);
+        verify(menuRepository).save(testMenu);
+    }
+
+    @Test
+    @DisplayName("Should update menu with null image")
+    void testUpdateMenuWithNullImage() throws IOException {
+        when(menuRepository.findById(1L)).thenReturn(Optional.of(testMenu));
+        when(menuRepository.save(any(Menu.class))).thenReturn(testMenu);
+
+        Menu updatedMenu = menuService.updateMenu(1L, testMenu, null);
+
+        assertNotNull(updatedMenu);
+        verify(menuRepository).save(testMenu);
+    }
+
+    @Test
+    @DisplayName("Should get all menus")
+    void testGetAllMenus() {
+        List<Menu> menuList = Arrays.asList(testMenu);
+        when(menuRepository.findAll()).thenReturn(menuList);
+
+        List<Menu> retrievedMenus = menuService.getAllMenus();
+
+        assertFalse(retrievedMenus.isEmpty());
+        assertEquals(1, retrievedMenus.size());
+    }
+
+    @Test
+    @DisplayName("Should get menu by ID")
+    void testGetMenuById() {
+        when(menuRepository.findById(1L)).thenReturn(Optional.of(testMenu));
+
+        Menu retrievedMenu = menuService.getMenuById(1L);
+
+        assertNotNull(retrievedMenu);
+        assertEquals(testMenu, retrievedMenu);
+    }
+
+    @Test
+    @DisplayName("Should throw exception when getting non-existent menu")
+    void testGetNonExistentMenuById() {
+        when(menuRepository.findById(anyLong())).thenReturn(Optional.empty());
+
+        assertThrows(RuntimeException.class,
+                () -> menuService.getMenuById(1L));
+    }
+
+    @Test
+    @DisplayName("Should delete menu")
+    void testDeleteMenu() {
+        menuService.deleteMenu(1L);
+        verify(menuRepository).deleteById(1L);
+    }
+
+    @Test
+    @DisplayName("Should throw exception when menu image is null")
+    void testGetMenuImageNull() {
+        Menu menuWithNullImage = new Menu();
+        menuWithNullImage.setMenuId(1L);
+        menuWithNullImage.setImage(null);
+
+        when(menuRepository.findById(1L)).thenReturn(Optional.of(menuWithNullImage));
+
+        assertThrows(EntityNotFoundException.class,
+                () -> menuService.getMenuImage(1L));
+    }
+
+    @Test
+    @DisplayName("Should handle unexpected exception in getMenuImage")
+    void testGetMenuImageUnexpectedException() {
+        when(menuRepository.findById(1L)).thenThrow(new RuntimeException("Unexpected error"));
+
+        assertThrows(RuntimeException.class,
+                () -> menuService.getMenuImage(1L));
+    }
 }
+
 

@@ -1,9 +1,7 @@
 package com.yash.Vegetabledeliveryonline.controller;
 
-
 import com.yash.Vegetabledeliveryonline.config.JwtService;
 import com.yash.Vegetabledeliveryonline.domain.User;
-import com.yash.Vegetabledeliveryonline.exception.UserBlockedException;
 import com.yash.Vegetabledeliveryonline.service.UserService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,21 +9,14 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-//import org.springframework.security.access.prepost.PreAuthorize;
-//import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.security.core.AuthenticationException;
-
-
-
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -114,7 +105,7 @@ public class UserController {
                     )
             );
 
-            // Generate token
+            // Generate Token
             String jwtToken = jwtService.generateToken(user);
 
             // Create sanitized user object
@@ -142,7 +133,6 @@ public class UserController {
                     .body(Map.of("error", "Login failed: " + e.getMessage()));
         }
     }
-
 
     @PostMapping("/logout")
     @PreAuthorize("isAuthenticated()")
